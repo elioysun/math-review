@@ -1,0 +1,14 @@
+<template>
+  <div class="app-shell">
+    <AppNav />
+    <main class="page-shell">
+      <RouterView />
+    </main>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { RouterView } from 'vue-router'
+
+import AppNav from '@/components/AppNav.vue'
+</script>
