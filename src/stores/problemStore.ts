@@ -4,8 +4,13 @@ import type { AddProblemInput, Problem, ProblemStatus } from '@/types/problem'
 import { addDays, getToday, isDue } from '@/utils/date'
 
 export const STORAGE_KEY = 'simple-review-problems'
-export const DEFAULT_SUBJECTS = ['高数', '线代', '概率论', '英语'] as const
+export const DEFAULT_SUBJECTS = ['高数', '线代', '概率论'] as const
 export const BASE_INTERVALS = [3, 7, 14, 30, 60, 90] as const
+export const PROBLEM_DISPLAY_STATUS_LABELS = {
+  due: '待复习',
+  scheduled: '未到期',
+  archived: '已归档',
+} as const
 export const DEFAULT_CHAPTERS_BY_SUBJECT = {
   高数: [
     '第一章、函数、极限与连续',
@@ -41,7 +46,16 @@ export const DEFAULT_CHAPTERS_BY_SUBJECT = {
 } as const
 
 type StoredProblem = Partial<Problem> & Record<string, unknown>
+type MathSubject = (typeof DEFAULT_SUBJECTS)[number]
 type SubjectWithDefaultChapters = keyof typeof DEFAULT_CHAPTERS_BY_SUBJECT
+export type ProblemDisplayStatus = keyof typeof PROBLEM_DISPLAY_STATUS_LABELS
+
+export interface TodayReviewStats {
+  total: number
+  reviewed: number
+  remaining: number
+  progress: number
+}
 
 function canUseStorage() {
   return typeof globalThis.localStorage !== 'undefined'
@@ -59,6 +73,10 @@ function normalizeStatus(status: unknown): ProblemStatus {
   return status === 'archived' ? 'archived' : 'active'
 }
 
+function isMathSubject(subject: string): subject is MathSubject {
+  return (DEFAULT_SUBJECTS as readonly string[]).includes(subject)
+}
+
 function migrateProblem(problem: StoredProblem): Problem | null {
   if (
     typeof problem.id !== 'string' ||
@@ -71,6 +89,10 @@ function migrateProblem(problem: StoredProblem): Problem | null {
     return null
   }
 
+  if (!isMathSubject(problem.subject)) {
+    return null
+  }
+
   return {
     id: problem.id,
     subject: problem.subject,
@@ -79,6 +101,7 @@ function migrateProblem(problem: StoredProblem): Problem | null {
     note: typeof problem.note === 'string' ? problem.note : undefined,
     createdAt: problem.createdAt,
     dueAt: problem.dueAt,
+    ...(typeof problem.lastReviewedAt === 'string' ? { lastReviewedAt: problem.lastReviewedAt } : {}),
     status: normalizeStatus(problem.status),
     wrongCount: typeof problem.wrongCount === 'number' ? problem.wrongCount : 0,
     rightCount: typeof problem.rightCount === 'number' ? problem.rightCount : 0,
@@ -163,19 +186,38 @@ export function getNextIntervalAfterRight(problem: Problem) {
   return Math.max(1, Math.round(interval * getWrongWeight(problem)))
 }
 
+export function getProblemDisplayStatus(problem: Problem, today = getToday()): ProblemDisplayStatus {
+  if (problem.status === 'archived') {
+    return 'archived'
+  }
+
+  return isDue(problem.dueAt, today) ? 'due' : 'scheduled'
+}
+
+export function getProblemDisplayStatusLabel(problem: Problem, today = getToday()) {
+  return PROBLEM_DISPLAY_STATUS_LABELS[getProblemDisplayStatus(problem, today)]
+}
+
+export function calculateTodayReviewStats(problems: Problem[], today = getToday()): TodayReviewStats {
+  const reviewed = problems.filter((problem) => problem.lastReviewedAt === today).length
+  const remaining = problems.filter((problem) => problem.status === 'active' && isDue(problem.dueAt, today)).length
+  const total = reviewed + remaining
+
+  return {
+    total,
+    reviewed,
+    remaining,
+    progress: total === 0 ? 100 : Math.round((reviewed / total) * 100),
+  }
+}
+
 export const useProblemStore = defineStore('problemStore', {
   state: () => ({
     problems: loadProblems() as Problem[],
   }),
   getters: {
-    subjectOptions(state) {
-      const subjects = new Set<string>(DEFAULT_SUBJECTS)
-      state.problems.forEach((problem) => {
-        if (problem.subject.trim()) {
-          subjects.add(problem.subject)
-        }
-      })
-      return Array.from(subjects)
+    subjectOptions() {
+      return [...DEFAULT_SUBJECTS]
     },
     chapterOptions(state) {
       return collectChapterOptions(state.problems)
@@ -189,6 +231,10 @@ export const useProblemStore = defineStore('problemStore', {
       saveProblems(this.problems)
     },
     addProblem(input: AddProblemInput) {
+      if (!isMathSubject(input.subject.trim())) {
+        throw new Error(`Unsupported subject: ${input.subject}`)
+      }
+
       const today = getToday()
       const problem: Problem = {
         id: createProblemId(),
@@ -218,6 +264,7 @@ export const useProblemStore = defineStore('problemStore', {
       const today = getToday()
       problem.rightCount += 1
       problem.reviewStage += 1
+      problem.lastReviewedAt = today
 
       if (problem.reviewStage > BASE_INTERVALS.length) {
         problem.status = 'archived'
@@ -240,6 +287,7 @@ export const useProblemStore = defineStore('problemStore', {
       problem.wrongCount += 1
       problem.rightCount = 0
       problem.reviewStage = Math.max(0, problem.reviewStage - 1)
+      problem.lastReviewedAt = today
       problem.dueAt = addDays(today, 1)
       this.save()
     },
@@ -269,6 +317,13 @@ export const useProblemStore = defineStore('problemStore', {
     },
     getDueProblems() {
       return this.problems.filter((problem) => problem.status === 'active' && isDue(problem.dueAt))
+    },
+    getReviewedTodayProblems() {
+      const today = getToday()
+      return this.problems.filter((problem) => problem.lastReviewedAt === today)
+    },
+    getTodayReviewStats() {
+      return calculateTodayReviewStats(this.problems)
     },
     getArchivedProblems() {
       return this.problems.filter((problem) => problem.status === 'archived')

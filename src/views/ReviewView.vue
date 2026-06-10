@@ -8,6 +8,33 @@
       <span class="count-label">{{ dueProblems.length }} 题</span>
     </div>
 
+    <section class="review-status" :class="{ 'review-status--complete': reviewStats.total > 0 && reviewStats.remaining === 0 }">
+      <div class="review-status__summary">
+        <div>
+          <span>今日复习状态</span>
+          <strong>{{ reviewStatusText }}</strong>
+        </div>
+        <div class="review-status__percent">{{ reviewStats.progress }}%</div>
+      </div>
+      <div class="review-status__bar" :style="{ '--review-progress': `${reviewStats.progress}%` }">
+        <span></span>
+      </div>
+      <dl class="review-status__meta">
+        <div>
+          <dt>已复习</dt>
+          <dd>{{ reviewStats.reviewed }}</dd>
+        </div>
+        <div>
+          <dt>剩余</dt>
+          <dd>{{ reviewStats.remaining }}</dd>
+        </div>
+        <div>
+          <dt>今日到期</dt>
+          <dd>{{ reviewStats.total }}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="panel">
       <div v-if="dueProblems.length === 0" class="empty-state">今天没有到期题目。</div>
 
@@ -69,4 +96,20 @@ import { useProblemStore } from '@/stores/problemStore'
 
 const store = useProblemStore()
 const dueProblems = computed(() => store.getDueProblems())
+const reviewStats = computed(() => store.getTodayReviewStats())
+const reviewStatusText = computed(() => {
+  if (reviewStats.value.total === 0) {
+    return '今天没有到期题目'
+  }
+
+  if (reviewStats.value.remaining === 0) {
+    return '今日到期题目已复习完'
+  }
+
+  if (reviewStats.value.reviewed === 0) {
+    return '今日到期题目还未开始'
+  }
+
+  return `已复习 ${reviewStats.value.reviewed} 题，还剩 ${reviewStats.value.remaining} 题`
+})
 </script>

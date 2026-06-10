@@ -1,6 +1,40 @@
-# Deploy to Aliyun ECS with Nginx
+# Deployment
 
-This project is a Vite/Vue single page app. Build locally and serve the generated `dist/` files from Nginx.
+This project is a Vite/Vue single page app. It can be deployed to GitHub Pages or served from an ECS/Nginx static directory.
+
+## GitHub Pages
+
+The repository includes a GitHub Actions workflow at:
+
+```text
+.github/workflows/deploy-pages.yml
+```
+
+The workflow builds the app with the GitHub Pages base path:
+
+```sh
+pnpm build:pages
+```
+
+It also copies `dist/index.html` to `dist/404.html` so direct visits to Vue routes such as `/record`, `/review`, and `/problems` can fall back to the SPA entry.
+
+To enable Pages:
+
+1. Push the repository to GitHub.
+2. Open the repository settings.
+3. Go to Pages.
+4. Set the source to GitHub Actions.
+5. Run the `Deploy GitHub Pages` workflow or push to `main`.
+
+The default project URL is:
+
+```text
+https://elioysun.github.io/math-review/
+```
+
+## Aliyun ECS with Nginx
+
+Build locally and serve the generated `dist/` files from Nginx.
 
 ## Local build
 

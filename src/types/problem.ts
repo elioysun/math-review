@@ -8,6 +8,7 @@ export interface Problem {
   note?: string
   createdAt: string
   dueAt: string
+  lastReviewedAt?: string
   status: ProblemStatus
   wrongCount: number
   rightCount: number
