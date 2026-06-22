@@ -92,6 +92,7 @@ import { RouterLink } from 'vue-router'
 
 import { useProblemStore } from '@/stores/problemStore'
 import type { Problem } from '@/types/problem'
+import { formatDisplayDate } from '@/utils/date'
 
 type PreviewTone = 'active' | 'warning' | ''
 
@@ -127,11 +128,11 @@ const previewItems = computed(() => {
   })
 
   todayProblems.value.forEach((problem) => {
-    addItem(problem, `今日新增 · 下次复习 ${problem.dueAt}`, 'active')
+    addItem(problem, `今日新增 · 下次复习 ${formatDisplayDate(problem.dueAt)}`, 'active')
   })
 
   activeProblems.value.forEach((problem) => {
-    addItem(problem, `下次复习 ${problem.dueAt} · ${formatProblemState(problem)}`, '')
+    addItem(problem, `下次复习 ${formatDisplayDate(problem.dueAt)} · ${formatProblemState(problem)}`, '')
   })
 
   return Array.from(selected.values())

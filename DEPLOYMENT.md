@@ -1,6 +1,6 @@
 # Deployment
 
-This project is a Vite/Vue single page app. It can be deployed to GitHub Pages or served from an ECS/Nginx static directory.
+This project is a Vite/Vue single page app. It can be deployed to GitHub Pages or served from an ECS static directory.
 
 ## GitHub Pages
 
@@ -32,9 +32,9 @@ The default project URL is:
 https://elioysun.github.io/math-review/
 ```
 
-## Aliyun ECS with Nginx
+## Aliyun ECS with Python systemd service
 
-Build locally and serve the generated `dist/` files from Nginx.
+Build locally and serve the generated `dist/` files with the SPA-aware Python static server in `deploy/spa_static_server.py`.
 
 ## Local build
 
@@ -48,26 +48,38 @@ pnpm build
 Replace `USER` and `HOST` with the ECS SSH user and public IP or domain.
 
 ```sh
-ssh USER@HOST 'sudo mkdir -p /var/www/math-review && sudo chown -R $USER:$USER /var/www/math-review'
-rsync -av --delete dist/ USER@HOST:/var/www/math-review/
+ssh USER@HOST 'sudo mkdir -p /www/wwwroot/math-review/dist && sudo chown -R $USER:$USER /www/wwwroot/math-review'
+rsync -av --delete dist/ USER@HOST:/www/wwwroot/math-review/dist/
+scp deploy/spa_static_server.py deploy/math-review.service USER@HOST:~/
 ```
 
-## Nginx config
+## Python systemd service
 
-Copy `deploy/nginx.math-review.conf` to the ECS Nginx sites directory and enable it according to the server layout.
-
-Ubuntu/Debian example:
+Install the server script outside `dist/` so normal `dist/` replacement does not delete it.
 
 ```sh
-scp deploy/nginx.math-review.conf USER@HOST:/tmp/math-review.conf
-ssh USER@HOST 'sudo mv /tmp/math-review.conf /etc/nginx/sites-available/math-review.conf && sudo ln -sf /etc/nginx/sites-available/math-review.conf /etc/nginx/sites-enabled/math-review.conf && sudo nginx -t && sudo systemctl reload nginx'
+ssh USER@HOST 'sudo cp ~/spa_static_server.py /www/wwwroot/math-review/spa_static_server.py && sudo cp ~/math-review.service /etc/systemd/system/math-review.service && sudo systemctl daemon-reload && sudo systemctl enable math-review && sudo systemctl restart math-review'
 ```
 
-CentOS/Alibaba Cloud Linux example:
+The service runs:
 
 ```sh
-scp deploy/nginx.math-review.conf USER@HOST:/tmp/math-review.conf
-ssh USER@HOST 'sudo mv /tmp/math-review.conf /etc/nginx/conf.d/math-review.conf && sudo nginx -t && sudo systemctl reload nginx'
+python3 /www/wwwroot/math-review/spa_static_server.py --directory /www/wwwroot/math-review/dist --host 0.0.0.0 --port 80
 ```
 
-The Nginx config uses `try_files $uri $uri/ /index.html;` so direct refreshes on Vue routes such as `/review` and `/problems` work correctly.
+The server preserves normal static-file behavior, but falls back to `index.html` for Vue history routes such as `/review` and `/problems`.
+
+## Verify deployment
+
+```sh
+curl -I http://HOST/
+curl -I http://HOST/review
+curl -I http://HOST/problems
+curl -I http://HOST/assets/not-found.js
+```
+
+The first three requests should return `200`. The missing asset check should return `404`, which confirms broken JS/CSS/image paths are not being masked by the SPA fallback.
+
+## Optional Nginx config
+
+`deploy/nginx.math-review.conf` is kept as an alternative deployment option. Its `try_files $uri $uri/ /index.html;` rule provides the same SPA refresh fallback when Nginx is used.

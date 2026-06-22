@@ -50,6 +50,7 @@
               <th>章节</th>
               <th>题号</th>
               <th>备注</th>
+              <th>录入日期</th>
               <th>下次复习</th>
             </tr>
           </thead>
@@ -59,7 +60,8 @@
               <td>{{ problem.chapter }}</td>
               <td class="strong">{{ problem.problemId }}</td>
               <td class="muted">{{ problem.note || '—' }}</td>
-              <td>{{ problem.dueAt }}</td>
+              <td>{{ formatDisplayDate(problem.createdAt) }}</td>
+              <td>{{ formatDisplayDate(problem.dueAt) }}</td>
             </tr>
           </tbody>
         </table>
@@ -72,6 +74,7 @@
 import { computed, reactive } from 'vue'
 
 import { DEFAULT_SUBJECTS, useProblemStore } from '@/stores/problemStore'
+import { formatDisplayDate } from '@/utils/date'
 
 const store = useProblemStore()
 
@@ -99,6 +102,7 @@ function handleSubmit() {
   })
 
   form.problemId = ''
+  form.chapter = ''
   form.note = ''
 }
 </script>

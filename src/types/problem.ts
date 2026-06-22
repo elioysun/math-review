@@ -7,6 +7,7 @@ export interface Problem {
   problemId: string
   note?: string
   createdAt: string
+  createdAtMs: number
   dueAt: string
   lastReviewedAt?: string
   status: ProblemStatus

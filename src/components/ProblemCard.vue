@@ -7,11 +7,22 @@
       </div>
       <span class="status-label" :class="displayStatus">{{ statusText }}</span>
     </div>
-    <p v-if="problem.note" class="problem-card__note">{{ problem.note }}</p>
+    <div v-if="editableNote" class="problem-card__note-editor">
+      <input
+        class="note-input note-input--card"
+        :value="problem.note ?? ''"
+        aria-label="备注"
+        autocomplete="off"
+        placeholder="—"
+        @change="handleNoteBlur"
+        @focusout="handleNoteBlur"
+      />
+    </div>
+    <p v-else-if="problem.note" class="problem-card__note">{{ problem.note }}</p>
     <dl class="problem-card__meta" :class="{ 'problem-card__meta--with-created-at': showCreatedAt }">
       <div v-if="showCreatedAt">
         <dt>录入</dt>
-        <dd>{{ problem.createdAt }}</dd>
+        <dd>{{ formatDisplayDate(problem.createdAt) }}</dd>
       </div>
       <div>
         <dt>错误</dt>
@@ -23,11 +34,11 @@
       </div>
       <div>
         <dt>阶段</dt>
-        <dd>{{ problem.reviewStage }}</dd>
+        <dd>{{ reviewStageText }}</dd>
       </div>
       <div>
         <dt>下次</dt>
-        <dd>{{ problem.dueAt }}</dd>
+        <dd>{{ formatDisplayDate(problem.dueAt) }}</dd>
       </div>
     </dl>
     <div v-if="$slots.actions" class="problem-card__actions">
@@ -39,14 +50,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { getProblemDisplayStatus, getProblemDisplayStatusLabel } from '@/stores/problemStore'
+import { getProblemCardStatus } from '@/components/problemCardStatus'
+import { formatReviewStage } from '@/stores/problemStore'
 import type { Problem } from '@/types/problem'
+import { formatDisplayDate } from '@/utils/date'
 
 const props = defineProps<{
   problem: Problem
+  editableNote?: boolean
   showCreatedAt?: boolean
+  today?: string
 }>()
 
-const displayStatus = computed(() => getProblemDisplayStatus(props.problem))
-const statusText = computed(() => getProblemDisplayStatusLabel(props.problem))
+const emit = defineEmits<{
+  'update-note': [id: string, note: string]
+}>()
+
+const cardStatus = computed(() => getProblemCardStatus(props.problem, props.today))
+const displayStatus = computed(() => cardStatus.value.displayStatus)
+const statusText = computed(() => cardStatus.value.statusText)
+const reviewStageText = computed(() => formatReviewStage(props.problem))
+
+function handleNoteBlur(event: Event) {
+  const target = event.target
+
+  if (target && 'value' in target) {
+    emit('update-note', props.problem.id, String(target.value))
+  }
+}
 </script>
