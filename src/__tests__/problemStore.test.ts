@@ -929,7 +929,7 @@ describe('problem store', () => {
 
     expect(problem.reviewStage).toBe(6)
     expect(problem.status).toBe('active')
-    expect(formatReviewStage(problem)).toBe('6/6')
+    expect(formatReviewStage(problem)).toBe('6/6 · 待最终确认')
 
     moveToDate(problem.dueAt)
     store.markRight(problem.id)

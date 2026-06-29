@@ -421,6 +421,10 @@ export function formatReviewStage(problem: Pick<Problem, 'reviewStage' | 'status
   const totalStages = BASE_INTERVALS.length
   const currentStage = Math.min(Math.max(problem.reviewStage, 0), totalStages)
 
+  if (currentStage === totalStages) {
+    return `${currentStage}/${totalStages} · 待最终确认`
+  }
+
   return `${currentStage}/${totalStages}`
 }
 

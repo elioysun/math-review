@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Serve a Vite/Vue SPA with history-mode route fallback."""
 
-from __future__ import annotations
-
 import argparse
 import contextlib
 import os
-from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from urllib.parse import urlsplit
+
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
 
 class SpaStaticRequestHandler(SimpleHTTPRequestHandler):
@@ -43,7 +46,7 @@ class SpaStaticRequestHandler(SimpleHTTPRequestHandler):
         if "." in leaf_name:
             return False
 
-        fallback_path = os.path.join(self.directory, self.fallback_filename)
+        fallback_path = os.path.join(os.getcwd(), self.fallback_filename)
         return os.path.isfile(fallback_path)
 
 
@@ -64,13 +67,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     directory = os.path.abspath(args.directory)
-    handler = partial(SpaStaticRequestHandler, directory=directory)
+    os.chdir(directory)
 
-    with ThreadingHTTPServer((args.host, args.port), handler) as httpd:
+    httpd = ThreadingHTTPServer((args.host, args.port), SpaStaticRequestHandler)
+    try:
         host, port = httpd.server_address[:2]
         print(f"Serving {directory} on http://{host}:{port}/", flush=True)
         with contextlib.suppress(KeyboardInterrupt):
             httpd.serve_forever()
+    finally:
+        httpd.server_close()
 
 
 if __name__ == "__main__":

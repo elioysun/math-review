@@ -34,52 +34,62 @@ https://elioysun.github.io/math-review/
 
 ## Aliyun ECS with Python systemd service
 
-Build locally and serve the generated `dist/` files with the SPA-aware Python static server in `deploy/spa_static_server.py`.
+The ECS deployment is intentionally script-driven. Do not start ad-hoc servers such as `python3 -m http.server 80`; port 80 should be owned by the `math-review` systemd service.
 
-## Local build
+The default ECS target is:
 
-```sh
-pnpm install
-pnpm build
+```text
+admin@47.254.252.144
 ```
 
-## Upload to ECS
+Override it with `ECS_USER` and `ECS_HOST` when needed.
 
-Replace `USER` and `HOST` with the ECS SSH user and public IP or domain.
-
-```sh
-ssh USER@HOST 'sudo mkdir -p /www/wwwroot/math-review/dist && sudo chown -R $USER:$USER /www/wwwroot/math-review'
-rsync -av --delete dist/ USER@HOST:/www/wwwroot/math-review/dist/
-scp deploy/spa_static_server.py deploy/math-review.service USER@HOST:~/
-```
-
-## Python systemd service
-
-Install the server script outside `dist/` so normal `dist/` replacement does not delete it.
+## Deploy to ECS
 
 ```sh
-ssh USER@HOST 'sudo cp ~/spa_static_server.py /www/wwwroot/math-review/spa_static_server.py && sudo cp ~/math-review.service /etc/systemd/system/math-review.service && sudo systemctl daemon-reload && sudo systemctl enable math-review && sudo systemctl restart math-review'
+pnpm deploy:ecs
 ```
 
-The service runs:
+`deploy/deploy_ecs.sh` performs the full release flow:
+
+1. Builds `dist/` locally.
+2. Compiles `deploy/spa_static_server.py` locally.
+3. Uploads `dist/`, `spa_static_server.py`, and `math-review.service`.
+4. Compiles the server script on ECS before installing it.
+5. Backs up the existing service/script.
+6. Publishes `dist/` through a staged tar upload and a versioned directory switch.
+7. Stops unmanaged `python3 -m http.server 80` processes if present.
+8. Reloads systemd, restarts `math-review`, and verifies routes.
+
+The expected route checks are:
+
+```text
+/                         200
+/problems                 200
+/review                   200
+/assets/not-found.js      404
+```
+
+## Verify ECS Without Deploying
 
 ```sh
-python3 /www/wwwroot/math-review/spa_static_server.py --directory /www/wwwroot/math-review/dist --host 0.0.0.0 --port 80
+pnpm verify:ecs
 ```
 
-The server preserves normal static-file behavior, but falls back to `index.html` for Vue history routes such as `/review` and `/problems`.
+`deploy/verify_ecs.sh` checks both server-local and public routes. It also fails if the `math-review` unit points at `python3 -m http.server 80` or if an unmanaged `http.server` process is running.
 
-## Verify deployment
+## Systemd Service
+
+The service starts the SPA-aware server:
 
 ```sh
-curl -I http://HOST/
-curl -I http://HOST/review
-curl -I http://HOST/problems
-curl -I http://HOST/assets/not-found.js
+/usr/bin/python3 /www/wwwroot/math-review/spa_static_server.py --directory /www/wwwroot/math-review/dist --host 0.0.0.0 --port 80
 ```
 
-The first three requests should return `200`. The missing asset check should return `404`, which confirms broken JS/CSS/image paths are not being masked by the SPA fallback.
+The unit has startup preflight checks for Python syntax, `dist/index.html`, and `dist/assets`. It uses `Restart=on-failure` so configuration errors do not become silent endless restarts.
 
 ## Optional Nginx config
 
-`deploy/nginx.math-review.conf` is kept as an alternative deployment option. Its `try_files $uri $uri/ /index.html;` rule provides the same SPA refresh fallback when Nginx is used.
+`deploy/nginx.math-review.conf` is kept as an alternative deployment option. It points at `/www/wwwroot/math-review/dist` and uses `try_files $uri $uri/ /index.html;` for Vue history routes.
+
+Do not enable Nginx on port 80 while `math-review.service` is also running on port 80. Switching to Nginx should be treated as a separate production change with `nginx -t`, rollback steps, and route verification.

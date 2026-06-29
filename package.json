@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:pages": "VITE_BASE=/math-review/ pnpm build",
+    "deploy:ecs": "bash deploy/deploy_ecs.sh",
     "preview": "vite preview",
     "test": "vitest run",
-    "type-check": "vue-tsc -b"
+    "type-check": "vue-tsc -b",
+    "verify:ecs": "bash deploy/verify_ecs.sh"
   },
   "dependencies": {
     "pinia": "^3.0.3",
