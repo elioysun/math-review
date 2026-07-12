@@ -50,7 +50,7 @@
         <article class="feature-card">
           <span class="feature-number">02</span>
           <h3>间隔复习</h3>
-          <p>做对后按 3、7、14、30、60、90 天推进，做错后自动回调节奏。</p>
+          <p>做对后按 3、7、14、30 天推进，做错后自动回调节奏。</p>
         </article>
         <article class="feature-card">
           <span class="feature-number">03</span>

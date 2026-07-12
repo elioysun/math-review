@@ -517,7 +517,7 @@ describe('problem store', () => {
     expect(problem.reviewStage).toBe(2)
   })
 
-  it('uses base intervals for problems that have never been wrong', () => {
+  it('uses compressed base intervals ending at 30 days for problems that have never been wrong', () => {
     const store = mountStore()
     const problem = store.addProblem({
       subject: '高数',
@@ -525,14 +525,9 @@ describe('problem store', () => {
       problemId: '880-1',
     })
 
-    const expectedDueDates = [
-      '2026-06-13',
-      '2026-06-20',
-      '2026-07-04',
-      '2026-08-03',
-      '2026-10-02',
-      '2026-12-31',
-    ]
+    expect(BASE_INTERVALS).toEqual([3, 7, 14, 30])
+
+    const expectedDueDates = ['2026-06-13', '2026-06-20', '2026-07-04', '2026-08-03']
 
     expectedDueDates.forEach((dueAt, index) => {
       moveToDate(problem.dueAt)
@@ -817,7 +812,7 @@ describe('problem store', () => {
     expect(fourWrong.dueAt).toBe('2026-06-11')
   })
 
-  it('archives only after passing the 90-day stage and one more right answer', () => {
+  it('archives after the final review scheduled with a 30-day interval', () => {
     const store = mountStore()
     const problem = store.addProblem({
       subject: '概率论',
@@ -825,22 +820,22 @@ describe('problem store', () => {
       problemId: '概率-1',
     })
 
-    for (let count = 0; count < 6; count += 1) {
+    for (let count = 0; count < BASE_INTERVALS.length; count += 1) {
       moveToDate(problem.dueAt)
       store.markRight(problem.id)
     }
 
-    expect(problem.reviewStage).toBe(6)
+    expect(problem.reviewStage).toBe(4)
     expect(problem.status).toBe('active')
 
     moveToDate(problem.dueAt)
     store.markRight(problem.id)
 
-    expect(problem.reviewStage).toBe(7)
+    expect(problem.reviewStage).toBe(5)
     expect(problem.status).toBe('archived')
   })
 
-  it('restores an auto-archived problem at stage six due tomorrow', () => {
+  it('restores an auto-archived problem at the final stage due tomorrow', () => {
     const store = mountStore()
     const problem = store.addProblem({
       subject: '概率论',
@@ -872,7 +867,7 @@ describe('problem store', () => {
     expect(problem.lastReviewedAt).toBe(lastReviewedAt)
   })
 
-  it('restores an auto-archived problem after reload at stage six due tomorrow', () => {
+  it('restores an auto-archived problem after reload at the final stage due tomorrow', () => {
     const store = mountStore()
     const problem = store.addProblem({
       subject: '概率论',
@@ -915,29 +910,82 @@ describe('problem store', () => {
       problemId: '阶段显示',
     })
 
-    expect(formatReviewStage(problem)).toBe('0/6')
+    expect(formatReviewStage(problem)).toBe('0/4')
 
     moveToDate(problem.dueAt)
     store.markRight(problem.id)
 
-    expect(formatReviewStage(problem)).toBe('1/6')
+    expect(formatReviewStage(problem)).toBe('1/4')
 
-    for (let count = 1; count < 6; count += 1) {
+    for (let count = 1; count < BASE_INTERVALS.length; count += 1) {
       moveToDate(problem.dueAt)
       store.markRight(problem.id)
     }
 
-    expect(problem.reviewStage).toBe(6)
+    expect(problem.reviewStage).toBe(4)
     expect(problem.status).toBe('active')
-    expect(formatReviewStage(problem)).toBe('6/6 · 待最终确认')
+    expect(formatReviewStage(problem)).toBe('4/4 · 待最终确认')
 
     moveToDate(problem.dueAt)
     store.markRight(problem.id)
 
-    expect(problem.reviewStage).toBe(7)
+    expect(problem.reviewStage).toBe(5)
     expect(problem.status).toBe('archived')
     expect(formatReviewStage(problem)).toBe('已归档')
-    expect(formatReviewStage(problem)).not.toBe('7/6')
+    expect(formatReviewStage(problem)).not.toBe('5/4')
+  })
+
+  it('caps legacy active 60/90-day stages to a final 30-day review', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: 'legacy-long-interval',
+          subject: '高数',
+          chapter: '极限',
+          problemId: 'legacy-60',
+          createdAt: '2026-05-01',
+          createdAtMs: 1,
+          dueAt: '2026-08-30',
+          lastReviewedAt: '2026-07-01',
+          status: 'active',
+          wrongCount: 0,
+          rightCount: 5,
+          reviewStage: 5,
+        },
+      ]),
+    )
+
+    const store = mountStore('2026-07-12')
+
+    expect(store.problems[0]?.reviewStage).toBe(4)
+    expect(store.problems[0]?.dueAt).toBe('2026-07-31')
+  })
+
+  it('caps a legacy long interval from today when the last review date is missing', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: 'legacy-missing-review-date',
+          subject: '线代',
+          chapter: '矩阵',
+          problemId: 'legacy-90',
+          createdAt: '2026-05-01',
+          createdAtMs: 1,
+          dueAt: '2026-11-01',
+          status: 'active',
+          wrongCount: 4,
+          rightCount: 6,
+          reviewStage: 6,
+        },
+      ]),
+    )
+
+    const store = mountStore('2026-07-12')
+
+    expect(store.problems[0]?.reviewStage).toBe(4)
+    expect(store.problems[0]?.dueAt).toBe('2026-07-27')
   })
 
   it('migrates old localStorage data with missing counters and reviewStage', () => {

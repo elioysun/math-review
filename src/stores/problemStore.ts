@@ -14,7 +14,7 @@ export const EXPORT_BACKUP_APP = 'math-review'
 export const EXPORT_BACKUP_SCHEMA = 'wrong-problems-backup'
 export const EXPORT_BACKUP_VERSION = 1
 export const DEFAULT_SUBJECTS = ['高数', '线代', '概率论'] as const
-export const BASE_INTERVALS = [3, 7, 14, 30, 60, 90] as const
+export const BASE_INTERVALS = [3, 7, 14, 30] as const
 export const PROBLEM_DISPLAY_STATUS_LABELS = {
   due: '待复习',
   scheduled: '未到期',
@@ -245,11 +245,23 @@ function migrateProblem(problem: StoredProblem, index: number, total: number): P
   }
 
   const createdAt = normalizeDate(problem.createdAt, getToday())
-  const dueAt = normalizeDate(problem.dueAt, createdAt)
+  let dueAt = normalizeDate(problem.dueAt, createdAt)
   const lastReviewedAt = normalizeDate(problem.lastReviewedAt, '')
   const status = normalizeStatus(problem.status)
+  const storedReviewStage = normalizeNonNegativeInteger(problem.reviewStage)
   const maxReviewStage = status === 'archived' ? BASE_INTERVALS.length + 1 : BASE_INTERVALS.length
-  const reviewStage = normalizeNonNegativeInteger(problem.reviewStage, 0, maxReviewStage)
+  const reviewStage = Math.min(storedReviewStage, maxReviewStage)
+  const wrongCount = normalizeNonNegativeInteger(problem.wrongCount)
+
+  if (status === 'active' && storedReviewStage > BASE_INTERVALS.length) {
+    const finalInterval = Math.max(
+      1,
+      Math.round(BASE_INTERVALS[BASE_INTERVALS.length - 1] * getWrongWeightFromCount(wrongCount)),
+    )
+    const intervalAnchor = lastReviewedAt || getToday()
+    const compressedDueAt = addDays(intervalAnchor, finalInterval)
+    dueAt = dueAt < compressedDueAt ? dueAt : compressedDueAt
+  }
 
   return {
     id: problem.id,
@@ -262,7 +274,7 @@ function migrateProblem(problem: StoredProblem, index: number, total: number): P
     dueAt,
     ...(lastReviewedAt ? { lastReviewedAt } : {}),
     status,
-    wrongCount: normalizeNonNegativeInteger(problem.wrongCount),
+    wrongCount,
     rightCount: normalizeNonNegativeInteger(problem.rightCount ?? problem.correctCount),
     reviewStage,
   }
@@ -384,11 +396,15 @@ function collectChapterOptions(problems: Problem[], subject?: string) {
   return Array.from(chapters)
 }
 
-export function getWrongWeight(problem: Problem) {
-  if (problem.wrongCount === 0) return 1
-  if (problem.wrongCount === 1) return 0.8
-  if (problem.wrongCount <= 3) return 0.6
+function getWrongWeightFromCount(wrongCount: number) {
+  if (wrongCount === 0) return 1
+  if (wrongCount === 1) return 0.8
+  if (wrongCount <= 3) return 0.6
   return 0.5
+}
+
+export function getWrongWeight(problem: Problem) {
+  return getWrongWeightFromCount(problem.wrongCount)
 }
 
 export function getNextIntervalAfterRight(problem: Problem) {
